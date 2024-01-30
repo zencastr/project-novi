@@ -1,0 +1,8 @@
+[project]
+dynamic = ["version"]
+name = "novi"
+description = "A simple, fast, and lightweight YouTube downloader."
+readme = "README.md"
+dependencies = [
+    "yt-dlp",
+]
