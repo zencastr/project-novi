@@ -26,10 +26,8 @@ def ensure_chapters(urls: list[str]) -> list[str]:
     """
     Ensure chapters are present in the urls, filter out ones that don't have them
     """
-    print(f"{urls=}")
     with tempfile.TemporaryDirectory() as tmpdir:
         output_path = Path(tmpdir)
-        print(f"{output_path=}")
         options = {
             **option_defaults,
             'outtmpl': {'default': f'{output_path}/%(id)s.%(ext)s'},
