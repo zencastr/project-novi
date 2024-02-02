@@ -22,9 +22,27 @@ option_defaults = {
 }
 
 
+def good_ids_from_infojsons(output_path: Path) -> set[str]:
+    """
+    return the set of ids that have chapters and are longer than 10m given a download dir
+    filenames MUST be in format %(id)s.info.json
+    """
+    good_ids = set()
+    for path in output_path.iterdir():
+        if str(path).endswith('.info.json'):
+            id_data = json.loads(path.read_text())
+            duration = id_data.get('duration')
+            chs = id_data.get('chapters')
+            if chs is not None:
+                if isinstance(chs, list) and len(chs) > 1:
+                    if duration > 600:  # 10m
+                        good_ids.add(path.stem.split('.')[0])
+    return good_ids
+
+
 def ensure_chapters(urls: list[str]) -> list[str]:
     """
-    Ensure chapters are present in the urls, filter out ones that don't have them
+    Given a list of urls (videos, channels, playlist, whatever), return a list of ids that have chapters
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         output_path = Path(tmpdir)
@@ -36,20 +54,11 @@ def ensure_chapters(urls: list[str]) -> list[str]:
         }
         with YoutubeDL(options) as ydl:
             ydl.download(urls)
-        # now, we only use the ones that have chapters
-        good_ids = set()
-        for path in output_path.iterdir():
-            if str(path).endswith('.info.json'):
-                id_data = json.loads(path.read_text())
-                if chs := id_data.get('chapters'):
-                    if isinstance(chs, list) and len(chs) > 1:
-                        good_ids.add(path.stem.split('.')[0])
-    # return urls that contain at least one good_id
-    # XXX: can speed this up probably
-    return [url for url in urls if any(good_id in url for good_id in good_ids)]
+        good_ids = good_ids_from_infojsons(output_path)
+    return list(good_ids)
 
 
-def download_urls(urls: list[str], output_dir: Path):
+def download_audio_and_subs_from_urls(urls: list[str], output_dir: Path):
     """
     yt-dlp --embed-chapters --extract-audio -o $outputdir/%(id)s.%(ext)s $url
     options generated with https://github.com/yt-dlp/yt-dlp/blob/5f25f348f9eb5db842b1ec6799f95bebb7ba35a7/devscripts/cli_to_api.py
@@ -59,17 +68,15 @@ def download_urls(urls: list[str], output_dir: Path):
         **option_defaults,
         'format': 'bestaudio/best',
         'outtmpl': {'default': f'{output_dir}/%(id)s.%(ext)s'},
+        'writeautomaticsub': True,
         'postprocessors': [{'key': 'FFmpegExtractAudio',
                             'nopostoverwrites': False,
                             'preferredcodec': 'best',
                             'preferredquality': '5'},
                             {'add_chapters': True,
                             'add_infojson': None,
-                            'add_metadata': False,
-                            'key': 'FFmpegMetadata'},
-                            {'key': 'FFmpegConcat',
-                            'only_multi_video': True,
-                            'when': 'playlist'}],
+                            'add_metadata': True,
+                            'key': 'FFmpegMetadata'}],
     }
     with YoutubeDL(options) as ydl:
         ydl.download(urls)
@@ -84,4 +91,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     urls = read_sample_file(args.urlfile)
     urls = ensure_chapters(urls)
-    download_urls(urls, args.output_dir)
+    download_audio_and_subs_from_urls(urls, args.output_dir)
